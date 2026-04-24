@@ -1,5 +1,33 @@
 //Inputs code 
+struct Components {
+  //StartBtn will tell us if the game has started or not 
+  //if startBtn is 0 then game has not started
+  //if startBtn is 1 then game has started
+  //if startBrn is 2 then game has been forcefully reset
+  //StartBtn is to be ONLY WRITE in this file, the output file 
+  // will be the one reading this varibale 
+  int startBtn;
+  // moveBtn will tell us if the player is moving 
+  //or staying still 
+  //If moveBtn is 0 the player is not moving 
+  //If moveBtn is 1 then player is moving 
+  //This variable is also to be ONLY WRITE and the outputs file
+  //will read this variable to calculate the score
+  int moveBtn;
+  //This will have the score recorded depending on the states of 
+  //the LEDs. 
+  //Score will be ONLY READ in this file, the outputs file will 
+  //change this score and we will display this value on the LCD 
+  int score;
+  //This gameStatus will tell us if the player has won or lost 
+  //If gameStatus is 0 then game is ongoing, no win or loss 
+  //If gameStatus is 1 the game is over 
+  //The gameStaus will only be 1 if score is >= 100 
+  //This gameStatus will only be 2 if the palyer lost 
+  //The gameStatus is READ only 
+  int gameStatus;
 
+}
 void setup() {
   // put your setup code here, to run once:
 

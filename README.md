@@ -41,4 +41,4 @@ This project models the familiar playground game with one **simulated caller** (
 
 ---
 
-## 🗺️ System Architecture
+## 🗺️ System Architecture 
