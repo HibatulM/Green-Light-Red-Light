@@ -27,9 +27,22 @@ struct Components {
   int gameStatus;
 
 }
+
+const int greenPin;
+const int redPin;
+const int yellowPin;
+const int buzzerPin;
+
+Components output;
 void setup() {
   // put your setup code here, to run once:
-
+  Serial.begin(9600);
+  pinMode(redPin, OUTPUT);
+  pinMode(greenPin, OUTPUT);
+  pinMode(yellowPin, OUTPUT);
+  pinMode(buzzerPin, OUTPUT);
+  output.gameStatus = 0;
+  output.score = 0;
 }
 
 void loop() {

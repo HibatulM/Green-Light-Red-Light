@@ -28,9 +28,14 @@ struct Components {
   int gameStatus;
 
 }
+
+Components input;
 void setup() {
   // put your setup code here, to run once:
-
+  Serial.begin(9600);
+  
+  input.moveBtn = 0;
+  input.startBtn = 0;
 }
 
 void loop() {
