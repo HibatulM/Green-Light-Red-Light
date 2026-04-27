@@ -1,4 +1,6 @@
 //Inputs code 
+#include <LiquidCrystal.h>
+
 struct Components {
   //This will have the score recorded depending on the states of 
   //the LEDs. 
@@ -12,7 +14,7 @@ struct Components {
   //This gameStatus will only be 2 if the palyer lost 
   //The gameStatus is READ only 
   int gameStatus;
-
+  int btnState;
 };
 
 const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
@@ -23,40 +25,96 @@ const int btnTwoPin;
 
 int gameState = 0;
 int localScore = 0;
+int prevScore = 0;
 
 int btnOnePrevState = LOW;
 int btnOneState = LOW;
-int delay = 50;
+int lastBtnOneState = LOW;
 unsigned long btnOneLastDebounceTime = 0;
 
 unsigned long btnTwoLastDebounceTime = 0;
-int mvDelay = 5;
-int btnTwoPrevState = LOW;
+int lastBtnTwoState = LOW;
 int btnTwoState = LOW;
 
+int debounceDelay = 50;
+int mvDelay = 5;
+
+unsigned long prevMillis = 0;
+unsigned long lastSerialRecieve = 0;
+unsigned long lastSerialSend = 0;
+unsigned long serialInterval  = 50;
+unsigned long nextGameInterval = 3000;
+unsigned long lastGameOver = 0;
 
 void setup() {
   // put your setup code here, to run once:
-  pinMode(btnOnePin, INPUT);
-  pinMode(btnTwoPin, INPUT);
+  pinMode(btnOnePin, INPUT_PULLUP);
+  pinMode(btnTwoPin, INPUT_PULLUP);
   Serial.begin(9600);
+
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
-  lcd.print("Press START");
+  lcd.print("  Press START  ");
+}
+
+void updateDisplay(){
+  lcd.print("                ");
+
+  if(gameState == 0){
+    lcd.setCursor(0, 0);
+    lcd.print("  Press START  ");
+  } else if (gameState == 1){
+    lcd.setCursor(0, 0);
+    lcd.print("Score: ");
+    lcd.print(score);
+    lcd.print("   ");
+    lcd.setCursor(0, 1);
+    if (score < 100) {
+      lcd.print("Keep going!    ");
+    } else {
+      lcd.print("Almost there!  ");
+    }
+  }else if (gameState == 2){
+    lcd.setCursor(0, 0);
+    lcd.print("   GAME OVER   ");
+    lcd.setCursor(0, 1);
+    lcd.print("  PLAY AGAIN!  ");
+    
+    if(millis() - lastGameOver >= nextGameInterval){
+      gameState = 0;  // play again state
+      score = 0;
+      lastGameOver = millis();
+    }
+    
+  } else if (gameState == 3){
+    if(score < 100){
+      lcd.setCursor(0, 0);
+      lcd.print("   GAME OVER   ");
+      lcd.setCursor(0, 1);
+      lcd.print("  YOU LOST!    ");
+      if(millis() - lastGameOver >= nextGameInterval){
+        gameState = 0;  // play again state
+        score = 0;
+        lastGameOver = millis();
+      }
+    } else {
+      lcd.setCursor(0, 0);
+      lcd.print("    YOU WIN!   ");
+      lcd.setCursor(0, 1);
+      lcd.print("  CONGRATS!    ");
+      if(millis() - lastGameOver >= nextGameInterval){
+        gameState = 0;  // play again state
+        score = 0;
+        lastGameOver = millis();
+      }
+    }
+  }
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  unsigned long currMillis = millis();
   
-  //Serial Communication
-  Components data;
-  data.gameStatus = gameState;
-  data.score = localScore;
-
-  Serial.write((byte*)&data, sizeof(data));
-
-
-
   //Reading and handling Inputs
   int btnOneRead = digitalRead(btnOnePin);
   int btnTwoRead = digitalRead(btnTwoPin);
@@ -64,10 +122,10 @@ void loop() {
   if(btnOneRead != btnOnePrevState){
     btnOneLastDebounceTime = millis();
   }
-  if((millis() - btnOneLastDebounceTime) > delay){
+  if((currMillis - btnOneLastDebounceTime) > debounceDelay){
     if(btnOneRead != btnOneState){
       btnOneState = btnOneRead;
-      if(btnOneState == HIGH) {
+      if(btnOneState == LOW) {
         if(gameState == 0){
           gameState = 1;
         } 
@@ -79,34 +137,51 @@ void loop() {
         }
       }
     }
-    btnOnePrevState = btnOneRead;
+    
   }
+  btnOneState = btnOneRead;
 
+  if(btnTwoRead != btnTwoPrevState){
+    btnTwoLastDebounceTime = millis();
+  }
+  if((currMillis - btnTwoLastDebounceTime) > debounceDelay){
+    if(btnTwoRead != btnTwoState){
+      btnTwoState = btnTwoRead;
+    }
+    
+  }
+  btnTwoState = btnTwoRead;
 
-  if(gameState == 0){
-    lcd.setCursor(0, 0);
-    lcd.print("PRESS START");
-  }
-  if (gameState == 1){
-    lcd.print("Score: ");
-    lcd.setCursor(0, 8);
-    lcd.print(localScore);
-  }
-  if(localScore == 100){
-    lcd.setCursor(0, 0);
-    lcd.print("                ");
-    lcd.print("YOU WON :) !");
-  }
-  if(gameState == 2){
-    lcd.setCursor(0, 0);
-    lcd.print("                ");
-    lcd.print("NEW GAME...");
-  }
-  if(gameState == 3){
-    lcd.setCursor(0, 0);
-    lcd.print("                ");
-    lcd.print("PLAY AGAIN");
-  }
+  if(currMillis - prevMillis >= 1000){
 
+    if(currMillis - lastSerialSend >= serialInterval){
+        //Serial Communication
+      Components data;
+      data.gameStatus = gameState;
+      data.score = localScore;
+      if(btnTwoState == LOW){
+        data.btnState = 1;
+      } else {
+        data.btnState = 0;
+      }
 
+      Serial.write((byte*)&data, sizeof(data));
+      lastSerialSend = currMillis;
+    }
+    
+    if(Serial.available() >= sizeof(Components)){
+      Components updateData;
+      Serial.readBytes((byte*)&updateData, sizeof(updateData));
+
+      gameState = updateData.gameStatus;
+      prevScore = localScore;
+      localScore = updateData.score;
+    }
+    
+    if(localScore != prevScore){
+      updateDisplay();
+      prevScore = localScore;
+    }
+  }
+  prevMillis = currMillis;
 }

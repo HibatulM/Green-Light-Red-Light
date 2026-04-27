@@ -12,6 +12,8 @@ struct Components {
   //This gameStatus will only be 2 if the palyer lost 
   int gameStatus;
 
+  //Help us track player movements 
+  int btnState;
 }
 
 //buzzer Frequencies
@@ -22,6 +24,10 @@ struct Components {
 #define NOTE_G4 392
 #define NOTE_A4 440
 #define NOTE_B4 494
+#define NOTE_DS4 311
+#define NOTE_G3 196
+#define NOTE_F3 175
+#define NOTE_GS3 208
 #define NOTE_AS4 466
 #define NOTE_C5 523
 
@@ -62,6 +68,15 @@ int noteDurations2[] = {
   4, 4, 4, 4, 4, 4, 2   // How I wonder what you are
 };
 
+int melody3[] = {
+  NOTE_C4, NOTE_DS4, NOTE_G3,  // Descending minor pattern
+  NOTE_F3, NOTE_GS3, NOTE_C4
+};
+
+int noteDurations3[] = {
+  4, 8, 4,  // First phrase
+  4, 8, 2   // Second phrase, ending slightly longer
+};
 
 const int greenPin;
 const int redPin;
@@ -73,13 +88,26 @@ int greenState = LOW;
 int redState = LOW;
 int yellowState = LOW;
 
-int gameSts = 0;
-int randNum = 0;
+
+//record changes in the game 
+int gameSts = 0; //0:game not startedm, 1:running, 2:game reset, 3=game over(win or loss)
+int randNum = 2;
+int score = 0;
+int localScore = 0;
+int lastBtnState = LOW;
+
+unsigned long lastLedChange = 0;
+unsigned long lastScoreUpdate = 0;
+unsigned long lastSerialSend = 0;
+unsigned long lastDebounce = 0;
 
 unsigned long prevMillis = 0;
 unsigned long interval = 1000;
+unsigned long ledInterval = 2000 * (randNum);
+unsigned long scoreInterval = 500;
+unsigned long serialInterval = 50;
 
-int localScore = 0;
+int sucRead = 0;
 
 void setup() {
   // put your setup code here, to run once:
@@ -89,87 +117,126 @@ void setup() {
   pinMode(yellowPin, OUTPUT);
   pinMode(buzzerPin, OUTPUT);
   
+  randomSeed(analogRead(0));
+
+  digitalWrite(redPin, LOW);
+  digitalWrite(greenPin, LOW);
+  digitalWrite(yellowPin, LOW);
+}
+
+void playLoseTune(){
+  for (int thisNote = 0; thisNote < 6; thisNote++) {
+    int noteDuration = 1000 / loseDurations[thisNote];
+    tone(buzzerPin, loseMelody[thisNote], noteDuration);
+    int pauseBetweenNotes = noteDuration * 1.3;
+    delay(pauseBetweenNotes);
+    noTone(buzzerPin);
+  }
+}
+
+void playWinTune(){
+  for (int thisNote = 0; thisNote < 25; thisNote++) {
+    int noteDuration = 1000 / winDurations[thisNote];
+    tone(buzzerPin, winMelody[thisNote], noteDuration);
+    int pauseBetweenNotes = noteDuration * 1.30;
+    delay(pauseBetweenNotes);
+    noTone(buzzerPin);
+  }
+}
+
+void updateLed(){
+  if(gameSts == 1){
+    randNum = random(0, 10);
+    if (randNum % 2 == 0) {
+      digitalWrite(greenPin, HIGH);
+      digitalWrite(redPin, LOW);
+      greenState = HIGH;
+      redState = LOW;
+    } else {
+      digitalWrite(redPin, HIGH);
+      digitalWrite(greenPin, LOW);
+      redState = HIGH;
+      greenState = LOW;
+    }
+    
+    // Yellow LED pattern
+    if (randNum % 3 == 0) {
+      digitalWrite(yellowPin, HIGH);
+      yellowState = HIGH;
+    } else {
+      digitalWrite(yellowPin, LOW);
+      yellowState = LOW;
+    }
+  }
+
 }
 
 void loop() {
-  randNum = rand() % 11;
+  // randNum = rand() % 11;
   unsigned long currMillis = millis();
   // put your main code here, to run repeatedly:
   Components data;
-  if(curMillis - previousMillis >= interval){
-      if (Serial.available() >= sizeof(data)) {
-      Serial.readBytes((byte*)&data, sizeof(data));
-
-      // Use your data
-      gameSts = data.gameStatus;
-      // int score  = data.score;
-    }
-    if(gameSts == 1 && ((redState == LOW && greenState == HIGH) || (redState == HIGH && greenState == LOW))){
-      if(redState == HIGH && localScore < data.score){
-        gameSts = 3;
-      }
-    }
-    if(data.score >= 100 && gameSts == 1){
-      //paly winning tune
-      for (int thisNote = 0; thisNote < 25; thisNote++) {
-        // Calculate the duration of each note in milliseconds
-        // A quarter note is 1000/4 = 250ms
-        int noteDuration = 1000 / noteDurations[thisNote];
-        tone(buzzerPin, melody[thisNote], noteDuration);
-
-        // Add a small pause between notes to make them distinct
-        int pauseBetweenNotes = noteDuration * 1.30;
-        delay(pauseBetweenNotes);
-
-        // Stop the tone before moving to the next note
-        noTone(buzzerPin);
-    } 
-    }
-    prevMillis = currMillis;
+  if (Serial.available() >= sizeof(data)) {
+    Serial.readBytes((byte*)&data, sizeof(data));
+    sucRead = 1;
+    // Use your data
+    gameSts = data.gameStatus;
+    lastBtnState = data.btnState;
+    score  = data.score;
+  }else{
+    sucRead = 0;
   }
-
-  if(curMillis - prevMillis >= interval+(2000*randNum)){
-    if(gameSts == 1){
-      if(randNum % 2 == 0){
-        digitalWrite(greenPin, HIGH);
-        greenState = HIGH;
-        digitalWrite(redPin, LOW);
-        redState = LOW;
-        localScore = data.score;
-      }else{
-        digitalWrite(redPin, HIGH);
-        redState = HIGH;
-        digitalWrite(greenPin, LOW);
-        greenState = LOW;
-        localScore = data.score;
-      }
-      if(randNum % 3 == 0){
-        digitalWrite(yellowPin, HIGH);
-        yellowState = HIGH;
-      }else{
-        digitalWrite(yellowPin, LOW);
-        yellowState = LOW;
-      }
-      if(randNum % 4 == 0){
-        //play the twinkle twinkle little star tune from buzzer
-        for (int thisNote = 0; thisNote < 42; thisNote++) {  // 42 notes total
-          // Calculate note duration: 1 second divided by note type (e.g., quarter note = 1000/4 = 250ms)
-          int noteDuration = 1000 / noteDurations[thisNote];
-          
-          // Play the note on the buzzer
-          tone(buzzerPin, melody[thisNote], noteDuration);
-          
-          // Add a small pause between notes to make them sound distinct
-          // A 30% pause (multiply by 1.3) is a good starting point
-          int pauseBetweenNotes = noteDuration * 1.3;
-          delay(pauseBetweenNotes);
-          
-          // Stop the tone before moving to the next note
-          noTone(buzzerPin);
+  if(gameSts == 1 && ((redState == LOW && greenState == HIGH) || (redState == HIGH && greenState == LOW))){
+    if(redState == HIGH && sucRead == 1 && localScore < data.score){
+      gameSts = 3;
+    }
+  }
+  if(data.score >= 100 && gameSts == 1){
+    //paly winning tune
+    playWinTune();
+  }
+  else if(gameSts == 3 and data.score != 100){
+    playLoseTune();
+  }
+  else if(gameSts == 1){
+    if(currMillis - lastLedChange >= ledInterval){
+      updateLed();
+      lastLedChange = currMillis;
+    }
+    if(lastBtnState == HIGH && greenState == HIGH){
+      if(currMillis - lastScoreUpdate >= scoreInterval){
+        if(score < 100){
+          score++;
+          lastScoreUpdate = currMillis;
         }
       }
+    } else {
+      lastScoreUpdate = currMillis;
     }
-    prevMillis = currMillis;
+
+    if (lastButtonState == HIGH && redState == HIGH) {
+      gameState = 2;  // Game over - loss
+      digitalWrite(greenPin, LOW);
+      digitalWrite(redPin, LOW);
+      digitalWrite(yellowPin, LOW);
+      playLoseTune();
+    }
+
+    if (score >= 100) {
+      gameState = 3;  // Win
+      digitalWrite(greenPin, LOW);
+      digitalWrite(redPin, LOW);
+      digitalWrite(yellowPin, LOW);
+      playWinTune();
+    }
+  }
+
+  if(currMillis - lastSerialSend >= serialInterval){
+    Components updateData;
+    updateData.gameStatus = gameSts;
+    updateData.score = score;
+    Serial.write((byte*)&updateData, sizeof(updateData));
+    lastSerialSend = currentMillis;
   }
 
   
