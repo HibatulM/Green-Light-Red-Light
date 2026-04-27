@@ -14,7 +14,7 @@ struct Components {
 
   //Help us track player movements 
   int btnState;
-}
+};
 
 //buzzer Frequencies
 #define NOTE_C4 262
@@ -32,7 +32,7 @@ struct Components {
 #define NOTE_C5 523
 
 // "Happy Birthday" melody sequence
-int melody[] = {
+int winMelody[] = {
   NOTE_C4, NOTE_C4, NOTE_D4, NOTE_C4, NOTE_F4, NOTE_E4, // "Happy Birthday to You"
   NOTE_C4, NOTE_C4, NOTE_D4, NOTE_C4, NOTE_G4, NOTE_F4, // "Happy Birthday to You"
   NOTE_C4, NOTE_C4, NOTE_C5, NOTE_A4, NOTE_F4, NOTE_E4, NOTE_D4, // "Happy Birthday dear [Name]"
@@ -41,7 +41,7 @@ int melody[] = {
 
 
 // Duration of each note (4 = quarter note, 2 = half note, etc.)
-int noteDurations[] = {
+int winDurations[] = {
   4, 4, 4, 4, 4, 2,
   4, 4, 4, 4, 4, 2,
   4, 4, 4, 4, 4, 4, 2,
@@ -59,7 +59,7 @@ int melody2[] = {
   NOTE_F4, NOTE_F4, NOTE_E4, NOTE_E4, NOTE_D4, NOTE_D4, NOTE_C4   // How I wonder what you are}
 };
 
-int noteDurations2[] = {
+int loseDurations[] = {
   4, 4, 4, 4, 4, 4, 2,  // Twinkle, twinkle, little star (G4 is half note/longer)
   4, 4, 4, 4, 4, 4, 2,  // How I wonder what you are
   4, 4, 4, 4, 4, 4, 2,  // Up above the world so high
@@ -68,20 +68,20 @@ int noteDurations2[] = {
   4, 4, 4, 4, 4, 4, 2   // How I wonder what you are
 };
 
-int melody3[] = {
+int loseMelody[] = {
   NOTE_C4, NOTE_DS4, NOTE_G3,  // Descending minor pattern
   NOTE_F3, NOTE_GS3, NOTE_C4
 };
 
-int noteDurations3[] = {
+int loseDurations3[] = {
   4, 8, 4,  // First phrase
   4, 8, 2   // Second phrase, ending slightly longer
 };
 
-const int greenPin;
-const int redPin;
-const int yellowPin;
-const int buzzerPin;
+const int greenPin = 7;
+const int redPin = 6;
+const int yellowPin = 5;
+const int buzzerPin = 4;
 
 
 int greenState = LOW;
@@ -214,8 +214,8 @@ void loop() {
       lastScoreUpdate = currMillis;
     }
 
-    if (lastButtonState == HIGH && redState == HIGH) {
-      gameState = 2;  // Game over - loss
+    if (lastBtnState == HIGH && redState == HIGH) {
+      gameSts = 2;  // Game over - loss
       digitalWrite(greenPin, LOW);
       digitalWrite(redPin, LOW);
       digitalWrite(yellowPin, LOW);
@@ -223,7 +223,7 @@ void loop() {
     }
 
     if (score >= 100) {
-      gameState = 3;  // Win
+      gameSts = 3;  // Win
       digitalWrite(greenPin, LOW);
       digitalWrite(redPin, LOW);
       digitalWrite(yellowPin, LOW);
@@ -236,7 +236,7 @@ void loop() {
     updateData.gameStatus = gameSts;
     updateData.score = score;
     Serial.write((byte*)&updateData, sizeof(updateData));
-    lastSerialSend = currentMillis;
+    lastSerialSend = currMillis;
   }
 
   

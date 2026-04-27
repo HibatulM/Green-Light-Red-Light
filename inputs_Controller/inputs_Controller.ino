@@ -1,3 +1,18 @@
+//----------------------------Header--------------------------------------------
+//Name: Hibatul Muqeet, Yash Rathore
+//Project: Traffic Light: A Fun Interactive Reaction Game 
+//Abstract: This project presents a digital simulation of the classic kindergarten game,
+// Red Light Green Light, implemented using multiple Arduino microcontrollers. 
+// The system consists of a network of player-controlled push buttons and a centralized light controller,
+//  all coordinated through a master controller that manages game logic and scoring. 
+// Inter-device communication is handled via serial communication between the Arduino units,
+//  enabling real-time responsiveness to player actions. Game progress and scores are 
+// displayed to all participants through an integrated LCD display. 
+// The result is an adaptive, fully responsive digital recreation of Red Light Green Light that faithfully 
+// replicates the original game's mechanics while demonstrating robust, expert-level 
+// embedded systems design and game management.
+
+
 //Inputs code 
 #include <LiquidCrystal.h>
 
@@ -66,10 +81,10 @@ void updateDisplay(){
   } else if (gameState == 1){
     lcd.setCursor(0, 0);
     lcd.print("Score: ");
-    lcd.print(score);
+    lcd.print(localScore);
     lcd.print("   ");
     lcd.setCursor(0, 1);
-    if (score < 100) {
+    if (localScore < 100) {
       lcd.print("Keep going!    ");
     } else {
       lcd.print("Almost there!  ");
@@ -82,19 +97,19 @@ void updateDisplay(){
     
     if(millis() - lastGameOver >= nextGameInterval){
       gameState = 0;  // play again state
-      score = 0;
+      localScore = 0;
       lastGameOver = millis();
     }
     
   } else if (gameState == 3){
-    if(score < 100){
+    if(localScore < 100){
       lcd.setCursor(0, 0);
       lcd.print("   GAME OVER   ");
       lcd.setCursor(0, 1);
       lcd.print("  YOU LOST!    ");
       if(millis() - lastGameOver >= nextGameInterval){
         gameState = 0;  // play again state
-        score = 0;
+        localScore = 0;
         lastGameOver = millis();
       }
     } else {
@@ -104,7 +119,7 @@ void updateDisplay(){
       lcd.print("  CONGRATS!    ");
       if(millis() - lastGameOver >= nextGameInterval){
         gameState = 0;  // play again state
-        score = 0;
+        localScore = 0;
         lastGameOver = millis();
       }
     }
@@ -141,7 +156,7 @@ void loop() {
   }
   btnOneState = btnOneRead;
 
-  if(btnTwoRead != btnTwoPrevState){
+  if(btnTwoRead != lastBtnTwoState){
     btnTwoLastDebounceTime = millis();
   }
   if((currMillis - btnTwoLastDebounceTime) > debounceDelay){
