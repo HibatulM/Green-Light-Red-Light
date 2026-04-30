@@ -1,11 +1,11 @@
-//Outputs Code 
+
 struct Components {
   int score;
   int gameStatus;
   int btnState;
 };
 
-//buzzer Frequencies
+// Buzzer frequencies
 #define NOTE_C4 262
 #define NOTE_D4 294
 #define NOTE_E4 330
@@ -20,7 +20,7 @@ struct Components {
 #define NOTE_AS4 466
 #define NOTE_C5 523
 
-// "Happy Birthday" melody sequence
+// "Happy Birthday" melody (win)
 int winMelody[] = {
   NOTE_C4, NOTE_C4, NOTE_D4, NOTE_C4, NOTE_F4, NOTE_E4,
   NOTE_C4, NOTE_C4, NOTE_D4, NOTE_C4, NOTE_G4, NOTE_F4,
@@ -35,6 +35,7 @@ int winDurations[] = {
   4, 4, 4, 4, 4, 2
 };
 
+// Lose melody
 int loseMelody[] = {
   NOTE_C4, NOTE_DS4, NOTE_G3,
   NOTE_F3, NOTE_GS3, NOTE_C4
@@ -45,73 +46,110 @@ int loseDurations[] = {
   4, 8, 2
 };
 
+// Pin definitions
 const int greenPin = 7;
 const int redPin = 6;
 const int yellowPin = 5;
 const int buzzerPin = 4;
 
+// LED states
 int greenState = LOW;
 int redState = LOW;
 int yellowState = LOW;
 
-int gameSts = 0;
-int randNum = 2;
+// Game variables
+int gameSts = 0;      // 0:idle, 1:active, 2:loss, 3:win
 int score = 0;
 int localScore = 0;
 int lastBtnState = LOW;
+int randNum = 2;
 
+// Timing variables (non‑blocking)
 unsigned long lastLedChange = 0;
 unsigned long lastScoreUpdate = 0;
 unsigned long lastSerialSend = 0;
-unsigned long lastDebounce = 0;
+unsigned long ledInterval = 2000;     // LED pattern changes every 2s
+unsigned long scoreInterval = 500;    // Score increment interval (500ms)
+unsigned long serialInterval = 50;    // Serial send interval
 
-unsigned long prevMillis = 0;
-unsigned long interval = 1000;
-unsigned long ledInterval = 2000;  // Changed: LED changes every 2 seconds
-unsigned long scoreInterval = 500;
-unsigned long serialInterval = 50;
-
+// Serial success flag
 int sucRead = 0;
 
-void setup() {
-  Serial.begin(9600);
-  pinMode(redPin, OUTPUT);
-  pinMode(greenPin, OUTPUT);
-  pinMode(yellowPin, OUTPUT);
-  pinMode(buzzerPin, OUTPUT);
-  
-  randomSeed(analogRead(0));
+// ==================== NON‑BLOCKING MELODY PLAYER ====================
+int* currentMelodyNotes;
+int* currentMelodyDurations;
+int melodyLength;
+int melodyIndex;
+unsigned long melodyNoteStartedAt;
+int melodyWaitDuration;
+bool melodyPlaying = false;
 
-  digitalWrite(redPin, LOW);
+void startWinMelody() {
+  // Turn off all LEDs
   digitalWrite(greenPin, LOW);
+  digitalWrite(redPin, LOW);
   digitalWrite(yellowPin, LOW);
+  
+  melodyPlaying = true;
+  currentMelodyNotes = winMelody;
+  currentMelodyDurations = winDurations;
+  melodyLength = 25;
+  melodyIndex = 0;
+  melodyNoteStartedAt = 0;
+  melodyWaitDuration = 0;
 }
 
-void playLoseTune(){
-  for (int thisNote = 0; thisNote < 6; thisNote++) {
-    int noteDuration = 1000 / loseDurations[thisNote];
-    tone(buzzerPin, loseMelody[thisNote], noteDuration);
-    int pauseBetweenNotes = noteDuration * 1.3;
-    delay(pauseBetweenNotes);
+void startLoseMelody() {
+  // Turn off all LEDs
+  digitalWrite(greenPin, LOW);
+  digitalWrite(redPin, LOW);
+  digitalWrite(yellowPin, LOW);
+  
+  melodyPlaying = true;
+  currentMelodyNotes = loseMelody;
+  currentMelodyDurations = loseDurations;
+  melodyLength = 6;
+  melodyIndex = 0;
+  melodyNoteStartedAt = 0;
+  melodyWaitDuration = 0;
+}
+
+void updateMelody() {
+  if (!melodyPlaying) return;
+  
+  // Finished all notes?
+  if (melodyIndex >= melodyLength) {
+    melodyPlaying = false;
     noTone(buzzerPin);
+    return;
+  }
+  
+  // Start a new note (or first note)
+  if (melodyNoteStartedAt == 0) {
+    int note = currentMelodyNotes[melodyIndex];
+    int durationDiv = currentMelodyDurations[melodyIndex];
+    int notePlayMs = 1000 / durationDiv;
+    int totalWaitMs = notePlayMs * 1.3;   // note + 30% gap
+    
+    tone(buzzerPin, note, notePlayMs);
+    melodyNoteStartedAt = millis();
+    melodyWaitDuration = totalWaitMs;
+  } 
+  else {
+    // Wait for current note (including gap) to finish
+    if (millis() - melodyNoteStartedAt >= melodyWaitDuration) {
+      melodyIndex++;
+      melodyNoteStartedAt = 0;   // will trigger next note in next call
+    }
   }
 }
+// ====================================================================
 
-void playWinTune(){
-  for (int thisNote = 0; thisNote < 25; thisNote++) {
-    int noteDuration = 1000 / winDurations[thisNote];
-    tone(buzzerPin, winMelody[thisNote], noteDuration);
-    int pauseBetweenNotes = noteDuration * 1.30;
-    delay(pauseBetweenNotes);
-    noTone(buzzerPin);
-  }
-}
-
-void updateLed(){
+void updateLed() {
   // Generate new random pattern
   randNum = random(0, 10);
   
-  // Set Red/Green LEDs (mutually exclusive)
+  // Red/Green (mutually exclusive)
   if (randNum % 2 == 0) {
     digitalWrite(greenPin, HIGH);
     digitalWrite(redPin, LOW);
@@ -124,7 +162,7 @@ void updateLed(){
     greenState = LOW;
   }
   
-  // Set Yellow LED
+  // Yellow LED
   if (randNum % 3 == 0) {
     digitalWrite(yellowPin, HIGH);
     yellowState = HIGH;
@@ -134,87 +172,93 @@ void updateLed(){
   }
 }
 
+void setup() {
+  Serial.begin(9600);
+  pinMode(redPin, OUTPUT);
+  pinMode(greenPin, OUTPUT);
+  pinMode(yellowPin, OUTPUT);
+  pinMode(buzzerPin, OUTPUT);
+  
+  randomSeed(analogRead(0));
+  
+  digitalWrite(redPin, LOW);
+  digitalWrite(greenPin, LOW);
+  digitalWrite(yellowPin, LOW);
+}
+
 void loop() {
   unsigned long currMillis = millis();
   
+  // 1) Non‑blocking melody playback (must run often)
+  updateMelody();
+  
+  // 2) Receive data from the other Arduino
   Components data;
   if (Serial.available() >= sizeof(data)) {
     Serial.readBytes((byte*)&data, sizeof(data));
     sucRead = 1;
     int oldGameSts = gameSts;
-
+    
     gameSts = data.gameStatus;
     lastBtnState = data.btnState;
     score = data.score;
     localScore = data.score;
-    updateLed();
-
+    
+    // Immediate LED update when game starts
     if (oldGameSts == 0 && gameSts == 1) {
       score = 0;
       localScore = 0;
       lastLedChange = millis();
-      updateLed();   // turn LED on immediately when START is clicked
+      updateLed();
     }
   } else {
     sucRead = 0;
   }
   
-  // Check for cheating (moving on red)
-  if(gameSts == 1 && redState == HIGH && sucRead == 1 && localScore < data.score && lastBtnState == HIGH){
-    gameSts = 2;  // Game over - loss
-    digitalWrite(greenPin, LOW);
-    digitalWrite(redPin, LOW);
-    digitalWrite(yellowPin, LOW);
-    playLoseTune();
-  }
-  
-  if(data.score >= 100 && gameSts == 1){
-    playWinTune();
-    gameSts = 3;
-  }
-  else if(gameSts == 2 && data.score != 100){
-    playLoseTune();
-    gameSts = 3;
-  }
-  
-  else if(gameSts == 1){
-    // FIXED: Only update LED when enough time has passed (every 2 seconds)
-    if(currMillis - lastLedChange >= ledInterval){
-      updateLed();
-      lastLedChange = currMillis;
+  // 3) Game logic – only when game is active AND no melody is playing
+  if (gameSts == 1 && !melodyPlaying) {
+    
+    // ----- Cheating detection (original logic) -----
+    if (redState == HIGH && sucRead == 1 && localScore < data.score && lastBtnState == HIGH) {
+      gameSts = 2;                // Loss
+      startLoseMelody();
     }
     
-    // Score increment logic - only when button is pressed AND light is green
-    if(lastBtnState == HIGH && greenState == HIGH){
-      if(currMillis - lastScoreUpdate >= scoreInterval){
-        if(score < 100){
+    // ----- Move on red = instant loss -----
+    else if (lastBtnState == HIGH && redState == HIGH) {
+      gameSts = 2;
+      startLoseMelody();
+    }
+    
+    // ----- Score increment on green + button press -----
+    else if (lastBtnState == HIGH && greenState == HIGH) {
+      if (currMillis - lastScoreUpdate >= scoreInterval) {
+        if (score < 100) {
           score++;
           lastScoreUpdate = currMillis;
         }
       }
-    } else if(lastBtnState == HIGH && redState == HIGH) {
-      // Moving on red - instant loss
-      gameSts = 2;
-      digitalWrite(greenPin, LOW);
-      digitalWrite(redPin, LOW);
-      digitalWrite(yellowPin, LOW);
-      playLoseTune();
-    } else {
-      // Reset score update timer when not actively scoring
+    } 
+    else {
+      // Reset score timer when not scoring
       lastScoreUpdate = currMillis;
     }
-
+    
+    // ----- Win condition -----
     if (score >= 100) {
-      gameSts = 3;  // Win
-      digitalWrite(greenPin, LOW);
-      digitalWrite(redPin, LOW);
-      digitalWrite(yellowPin, LOW);
-      playWinTune();
+      gameSts = 3;               // Win
+      startWinMelody();
+    }
+    
+    // ----- LED pattern update (every 2 seconds) -----
+    if (currMillis - lastLedChange >= ledInterval) {
+      updateLed();
+      lastLedChange = currMillis;
     }
   }
-
-  // Send data back to input Arduino
-  if(currMillis - lastSerialSend >= serialInterval){
+  
+  // 4) Send current state back to the other Arduino
+  if (currMillis - lastSerialSend >= serialInterval) {
     Components updateData;
     updateData.gameStatus = gameSts;
     updateData.score = score;
